@@ -152,8 +152,11 @@ class TangoRosNode {
   sensor_msgs::CompressedImage fisheye_compressed_image_;
   cv::Mat fisheye_image_;
 
-  image_transport::Publisher color_image_publisher_;
+  std::shared_ptr<image_transport::ImageTransport> image_transport_;
+  image_transport::CameraPublisher color_image_publisher_;
+  //ros::Publisher color_image_publisher_;
   sensor_msgs::CompressedImage color_compressed_image_;
+  sensor_msgs::Image color_image_msg_;
   cv::Mat color_image_;
   sensor_msgs::CameraInfo color_image_camera_info_;
   std::shared_ptr<camera_info_manager::CameraInfoManager> camera_info_manager_;
