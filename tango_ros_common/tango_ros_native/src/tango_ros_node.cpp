@@ -19,8 +19,11 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 
+#include <cv_bridge/cv_bridge.h>
 #include <dynamic_reconfigure/config_tools.h>
 #include <dynamic_reconfigure/server.h>
+#include <sensor_msgs/distortion_models.h>
+#include <sensor_msgs/image_encodings.h>
 #include <sensor_msgs/PointField.h>
 #include <sensor_msgs/point_cloud2_iterator.h>
 
@@ -185,9 +188,8 @@ TangoRosNode::TangoRosNode() : run_threads_(false) {
         node_handle_.advertise<sensor_msgs::CompressedImage>(publisher_config_.fisheye_camera_topic,
         queue_size, latching);
 
-  color_image_publisher_ =
-      node_handle_.advertise<sensor_msgs::CompressedImage>(publisher_config_.color_camera_topic,
-      queue_size, latching);
+  image_transport::ImageTransport it(node_handle_);
+  color_image_publisher_ = it.advertise(publisher_config_.color_camera_topic, queue_size, latching);
 }
 
 TangoRosNode::TangoRosNode(const PublisherConfiguration& publisher_config) :
@@ -236,6 +238,23 @@ TangoErrorType TangoRosNode::OnTangoServiceConnected() {
     return TANGO_INVALID;
   }
   time_offset_ =  ros::Time::now().toSec() * 1e3 - pose.timestamp;
+
+  TangoCameraIntrinsics tango_camera_intrinsics;
+  TangoService_getCameraIntrinsics(TANGO_CAMERA_COLOR, &tango_camera_intrinsics);
+  color_image_camera_info_.height = tango_camera_intrinsics.height;
+  color_image_camera_info_.width = tango_camera_intrinsics.width;
+  color_image_camera_info_.distortion_model = sensor_msgs::distortion_models::PLUMB_BOB;
+  color_image_camera_info_.D = {tango_camera_intrinsics.distortion[0],
+      tango_camera_intrinsics.distortion[1],
+      tango_camera_intrinsics.distortion[2],
+      tango_camera_intrinsics.distortion[3],
+      tango_camera_intrinsics.distortion[4]};
+  color_image_camera_info_.K = {tango_camera_intrinsics.fx, 0, tango_camera_intrinsics.cx,
+                               0, tango_camera_intrinsics.fy, tango_camera_intrinsics.cy,
+                               0, 0, 1};
+  ros::NodeHandle camera_nh("tango/camera/color_1");
+  camera_info_manager_.reset(new camera_info_manager::CameraInfoManager(camera_nh));
+  camera_info_manager_->setCameraName("color_1");
   return TANGO_SUCCESS;
 }
 
@@ -520,9 +539,17 @@ void TangoRosNode::PublishColorImage() {
       std::unique_lock<std::mutex> lock(color_image_available_mutex_);
       color_image_available_.wait(lock);
       if ((publisher_config_.publish_camera & CAMERA_COLOR)) {
-        compressImage(color_image_, CV_IMAGE_COMPRESSING_FORMAT,
-                      IMAGE_COMPRESSING_QUALITY, &color_compressed_image_);
-        color_image_publisher_.publish(color_compressed_image_);
+        /*compressImage(color_image_, CV_IMAGE_COMPRESSING_FORMAT,
+                      IMAGE_COMPRESSING_QUALITY, &color_compressed_image_);*/
+
+        cv_bridge::CvImage out_msg;
+        out_msg.header = color_compressed_image_.header;
+        out_msg.encoding = sensor_msgs::image_encodings::BGRA8;
+        out_msg.image = color_image_;
+        color_image_publisher_.publish(out_msg.toImageMsg());
+
+        color_image_camera_info_.header = color_compressed_image_.header;
+        camera_info_manager_->setCameraInfo(color_image_camera_info_);
       }
     }
   }

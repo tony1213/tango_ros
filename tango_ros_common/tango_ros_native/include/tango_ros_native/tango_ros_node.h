@@ -25,9 +25,12 @@
 
 #include <opencv2/core/core.hpp>
 
+#include <image_transport/image_transport.h>
+#include <camera_info_manager/camera_info_manager.h>
 #include <geometry_msgs/TransformStamped.h>
 #include <ros/ros.h>
 #include <ros/node_handle.h>
+#include <sensor_msgs/CameraInfo.h>
 #include <sensor_msgs/CompressedImage.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <tf/transform_broadcaster.h>
@@ -62,7 +65,7 @@ struct PublisherConfiguration {
   // Topic name for the fisheye image publisher.
   std::string fisheye_camera_topic = "tango/camera/fisheye_1/image_raw/compressed";
   // Topic name for the color image publisher.
-  std::string color_camera_topic = "tango/camera/color_1/image_raw/compressed";
+  std::string color_camera_topic = "tango/camera/color_1/image_raw";
   // Param name for the drift correction parameter.
   std::string enable_drift_correction_param = "tango/enable_drift_correction";
 };
@@ -149,9 +152,11 @@ class TangoRosNode {
   sensor_msgs::CompressedImage fisheye_compressed_image_;
   cv::Mat fisheye_image_;
 
-  ros::Publisher color_image_publisher_;
+  image_transport::Publisher color_image_publisher_;
   sensor_msgs::CompressedImage color_compressed_image_;
   cv::Mat color_image_;
+  sensor_msgs::CameraInfo color_image_camera_info_;
+  std::shared_ptr<camera_info_manager::CameraInfoManager> camera_info_manager_;
 };
 }  // namespace tango_ros_native
 #endif  // TANGO_ROS_NODE_H_
