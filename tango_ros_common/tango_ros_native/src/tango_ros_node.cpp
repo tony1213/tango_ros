@@ -191,7 +191,11 @@ TangoRosNode::TangoRosNode() : run_threads_(false) {
   LOG(INFO) << "Creation of image transport";
   image_transport_.reset(new image_transport::ImageTransport(node_handle_));
   LOG(INFO) << "Creation of camera publisher";
-  color_image_publisher_ = image_transport_->advertiseCamera(publisher_config_.color_camera_topic, queue_size, latching);
+  try {
+    color_image_publisher_ = image_transport_->advertiseCamera(publisher_config_.color_camera_topic, queue_size, latching);
+  } catch (const image_transport::Exception& e) {
+    LOG(ERROR) << e.what();
+  }
   LOG(INFO) << "END";
   /*color_image_publisher_ =
       node_handle_.advertise<sensor_msgs::CompressedImage>(publisher_config_.color_camera_topic,
