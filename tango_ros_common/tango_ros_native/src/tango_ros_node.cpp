@@ -19,9 +19,11 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 
+#include <cv_bridge/cv_bridge.h>
 #include <dynamic_reconfigure/config_tools.h>
 #include <dynamic_reconfigure/server.h>
 #include <sensor_msgs/distortion_models.h>
+#include <sensor_msgs/image_encodings.h>
 #include <sensor_msgs/PointField.h>
 #include <sensor_msgs/point_cloud2_iterator.h>
 
@@ -117,7 +119,7 @@ void toPointCloud2(const TangoPointCloud& tango_point_cloud,
 // @param image, cv::Mat to compress, in YUV420sp format.
 // @param compressing_quality, value from 0 to 100 (the higher is the better).
 // @param compressed_image, the output CompressedImage.
-void compressImage(const cv::Mat& image, const char* compressing_format,
+/*void compressImage(const cv::Mat& image, const char* compressing_format,
                    int compressing_quality,
                    sensor_msgs::CompressedImage* compressed_image) {
   cv::Mat image_rgb_encoded;
@@ -125,7 +127,7 @@ void compressImage(const cv::Mat& image, const char* compressing_format,
   cv::cvtColor(image, image_rgb_encoded, cv::COLOR_YUV420sp2BGRA);
   std::vector<int> params {CV_IMWRITE_JPEG_QUALITY, compressing_quality};
   cv::imencode(compressing_format, image_rgb_encoded, compressed_image->data, params);
-}
+}*/
 // Converts a TangoCoordinateFrameType to a ros frame ID i.e. a string.
 // @param tango_frame_type, TangoCoordinateFrameType to convert.
 // @return returns the corresponding frame id.
@@ -189,9 +191,12 @@ TangoRosNode::TangoRosNode() : run_threads_(false) {
   color_image_publisher_ =
       node_handle_.advertise<sensor_msgs::CompressedImage>(publisher_config_.color_camera_topic,
       queue_size, latching);
+  color_image_raw_publisher_ =
+      node_handle_.advertise<sensor_msgs::Image>("tango/camera/color_1/image_raw",
+      queue_size, latching);
   color_camera_info_publisher_ =
-      node_handle_.advertise<sensor_msgs::CameraInfo>("tango/camera/color_1/info",
-        queue_size, latching);
+      node_handle_.advertise<sensor_msgs::CameraInfo>("tango/camera/color_1/camera_info",
+      queue_size, latching);
 }
 
 TangoRosNode::TangoRosNode(const PublisherConfiguration& publisher_config) :
@@ -523,11 +528,11 @@ void TangoRosNode::PublishFisheyeImage() {
     {
       std::unique_lock<std::mutex> lock(fisheye_image_available_mutex_);
       fisheye_image_available_.wait(lock);
-      if ((publisher_config_.publish_camera & CAMERA_FISHEYE)) {
+      /*if ((publisher_config_.publish_camera & CAMERA_FISHEYE)) {
         compressImage(fisheye_image_, CV_IMAGE_COMPRESSING_FORMAT,
                       IMAGE_COMPRESSING_QUALITY, &fisheye_compressed_image_);
         fisheye_image_publisher_.publish(fisheye_compressed_image_);
-      }
+      }*/
     }
   }
 }
@@ -541,9 +546,17 @@ void TangoRosNode::PublishColorImage() {
       std::unique_lock<std::mutex> lock(color_image_available_mutex_);
       color_image_available_.wait(lock);
       if ((publisher_config_.publish_camera & CAMERA_COLOR)) {
-        compressImage(color_image_, CV_IMAGE_COMPRESSING_FORMAT,
+
+        cv_bridge::CvImage cv_bridge_image;
+        cv_bridge_image.header = color_compressed_image_.header;
+        cv_bridge_image.encoding = sensor_msgs::image_encodings::BGR8;
+        cv_bridge_image.image = color_image_;
+        color_image_raw_publisher_.publish(*(cv_bridge_image.toImageMsg()));
+
+        /*compressImage(color_image_, CV_IMAGE_COMPRESSING_FORMAT,
                       IMAGE_COMPRESSING_QUALITY, &color_compressed_image_);
-        color_image_publisher_.publish(color_compressed_image_);
+        color_image_publisher_.publish(color_compressed_image_);*/
+
 
         color_image_camera_info_.header = color_compressed_image_.header;
         camera_info_manager_->setCameraInfo(color_image_camera_info_);
