@@ -25,9 +25,11 @@
 
 #include <opencv2/core/core.hpp>
 
+#include <camera_info_manager/camera_info_manager.h>
 #include <geometry_msgs/TransformStamped.h>
 #include <ros/ros.h>
 #include <ros/node_handle.h>
+#include <sensor_msgs/CameraInfo.h>
 #include <sensor_msgs/CompressedImage.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <tf/transform_broadcaster.h>
@@ -152,6 +154,9 @@ class TangoRosNode {
   ros::Publisher color_image_publisher_;
   sensor_msgs::CompressedImage color_compressed_image_;
   cv::Mat color_image_;
+  ros::Publisher color_camera_info_publisher_;
+  sensor_msgs::CameraInfo color_image_camera_info_;
+  std::shared_ptr<camera_info_manager::CameraInfoManager> camera_info_manager_;
 };
 }  // namespace tango_ros_native
 #endif  // TANGO_ROS_NODE_H_

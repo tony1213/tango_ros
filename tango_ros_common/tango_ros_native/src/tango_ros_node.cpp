@@ -21,6 +21,7 @@
 
 #include <dynamic_reconfigure/config_tools.h>
 #include <dynamic_reconfigure/server.h>
+#include <sensor_msgs/distortion_models.h>
 #include <sensor_msgs/PointField.h>
 #include <sensor_msgs/point_cloud2_iterator.h>
 
@@ -188,6 +189,9 @@ TangoRosNode::TangoRosNode() : run_threads_(false) {
   color_image_publisher_ =
       node_handle_.advertise<sensor_msgs::CompressedImage>(publisher_config_.color_camera_topic,
       queue_size, latching);
+  color_camera_info_publisher_ =
+      node_handle_.advertise<sensor_msgs::CameraInfo>("tango/camera/color_1/info",
+        queue_size, latching);
 }
 
 TangoRosNode::TangoRosNode(const PublisherConfiguration& publisher_config) :
@@ -236,6 +240,23 @@ TangoErrorType TangoRosNode::OnTangoServiceConnected() {
     return TANGO_INVALID;
   }
   time_offset_ =  ros::Time::now().toSec() * 1e3 - pose.timestamp;
+
+  TangoCameraIntrinsics tango_camera_intrinsics;
+  TangoService_getCameraIntrinsics(TANGO_CAMERA_COLOR, &tango_camera_intrinsics);
+  color_image_camera_info_.height = tango_camera_intrinsics.height;
+  color_image_camera_info_.width = tango_camera_intrinsics.width;
+  color_image_camera_info_.distortion_model = sensor_msgs::distortion_models::PLUMB_BOB;
+  color_image_camera_info_.D = {tango_camera_intrinsics.distortion[0],
+      tango_camera_intrinsics.distortion[1],
+      tango_camera_intrinsics.distortion[2],
+      tango_camera_intrinsics.distortion[3],
+      tango_camera_intrinsics.distortion[4]};
+  color_image_camera_info_.K = {tango_camera_intrinsics.fx, 0, tango_camera_intrinsics.cx,
+                               0, tango_camera_intrinsics.fy, tango_camera_intrinsics.cy,
+                               0, 0, 1};
+  camera_info_manager_.reset(new camera_info_manager::CameraInfoManager(node_handle_));
+  camera_info_manager_->setCameraName("color_1");
+
   return TANGO_SUCCESS;
 }
 
@@ -523,6 +544,10 @@ void TangoRosNode::PublishColorImage() {
         compressImage(color_image_, CV_IMAGE_COMPRESSING_FORMAT,
                       IMAGE_COMPRESSING_QUALITY, &color_compressed_image_);
         color_image_publisher_.publish(color_compressed_image_);
+
+        color_image_camera_info_.header = color_compressed_image_.header;
+        camera_info_manager_->setCameraInfo(color_image_camera_info_);
+        color_camera_info_publisher_.publish(color_image_camera_info_);
       }
     }
   }
