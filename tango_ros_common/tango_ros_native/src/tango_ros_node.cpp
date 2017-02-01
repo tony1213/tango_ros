@@ -253,12 +253,12 @@ TangoErrorType TangoRosNode::OnTangoServiceConnected() {
   color_image_camera_info_.distortion_model = sensor_msgs::distortion_models::PLUMB_BOB;
   color_image_camera_info_.D = {tango_camera_intrinsics.distortion[0],
       tango_camera_intrinsics.distortion[1],
-      tango_camera_intrinsics.distortion[2],
-      tango_camera_intrinsics.distortion[3],
-      tango_camera_intrinsics.distortion[4]};
+      0., 0., tango_camera_intrinsics.distortion[2]};
   color_image_camera_info_.K = {tango_camera_intrinsics.fx, 0, tango_camera_intrinsics.cx,
                                0, tango_camera_intrinsics.fy, tango_camera_intrinsics.cy,
                                0, 0, 1};
+  color_image_camera_info_.R = {1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0};
+  color_image_camera_info_.P = {1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0};
   camera_info_manager_.reset(new camera_info_manager::CameraInfoManager(node_handle_));
   camera_info_manager_->setCameraName("color_1");
 
@@ -547,10 +547,12 @@ void TangoRosNode::PublishColorImage() {
       color_image_available_.wait(lock);
       if ((publisher_config_.publish_camera & CAMERA_COLOR)) {
 
+        cv::Mat image_rgb_encoded;
+        cv::cvtColor(color_image_, image_rgb_encoded, cv::COLOR_YUV420sp2BGRA);
         cv_bridge::CvImage cv_bridge_image;
         cv_bridge_image.header = color_compressed_image_.header;
-        cv_bridge_image.encoding = sensor_msgs::image_encodings::BGR8;
-        cv_bridge_image.image = color_image_;
+        cv_bridge_image.encoding = sensor_msgs::image_encodings::BGRA8;
+        cv_bridge_image.image = image_rgb_encoded;
         color_image_raw_publisher_.publish(*(cv_bridge_image.toImageMsg()));
 
         /*compressImage(color_image_, CV_IMAGE_COMPRESSING_FORMAT,
